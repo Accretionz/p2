@@ -4,14 +4,15 @@
 
 #include "queue.h"
 
-struct queue {
-	/* TODO Phase 1 */
-	struct Node {
-		void *data; //Allows for any data type
-		struct Node *next;
-	} *head, *tail;
+typedef struct node {
+    void *data;
+    struct node *next;
+} Node;
 
-	int size;
+struct queue {
+    int size;
+    Node *head;
+    Node *tail;
 };
 
 queue_t queue_create(void)
@@ -61,7 +62,7 @@ int queue_enqueue(queue_t queue, void *data)
 	}
 
 	newNode->data = data;
-	newNode->next = NULL:
+	newNode->next = NULL;
 
 	// If queue is empty, newNode is both head and tail.
 	if (queue->head == NULL)
@@ -95,8 +96,8 @@ int queue_dequeue(queue_t queue, void **data)
 	// If queue only has one element
 	if (queue->head == queue->tail)
 	{
-		queue->head == NULL;
-		queue->tail == NULL;
+		queue->head = NULL;
+		queue->tail = NULL;
 	}
 	// If more than one element, head pointer updated to next node
 	else
@@ -112,11 +113,67 @@ int queue_dequeue(queue_t queue, void **data)
 int queue_delete(queue_t queue, void *data)
 {
 	/* TODO Phase 1 */
+
+	if (queue == NULL || data || NULL || queue->head == NULL)
+	{
+		return -1;
+	}
+
+	Node *current = queue->head;
+	Node *previous = NULL;
+
+	while (current != NULL)
+	{
+		if (current->data == data)
+		{
+			if (previous == NULL)
+			{
+				queue->head = current->next;
+			}
+			else
+			{
+				previous->next = current->next;
+			}
+
+			if (current == queue->tail)
+			{
+				queue->tail = previous;
+			}
+
+			free(current);
+			queue->size--;
+			return 0;
+		}
+
+		previous = current;
+		current = current->next;
+	}
+
+	return -1;
 }
+
 
 int queue_iterate(queue_t queue, queue_func_t func)
 {
 	/* TODO Phase 1 */
+
+	if (queue == NULL || func == NULL)
+	{
+		return -1;
+	}
+
+	Node *current = queue->head;
+
+	while (current != NULL)
+	{
+		Node *temp = current->next;
+
+		func(queue, current->data);
+
+		current = temp;
+	}
+
+	return 0;
 }
 
 int queue_length(queue_t queue)
