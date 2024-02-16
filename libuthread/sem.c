@@ -51,15 +51,16 @@ int sem_down(sem_t sem)
 	if (!sem) return -1;
 
 	preempt_disable(); // Disable preempts to prevent race conditions
-	while(sem->count = 0)
+	while(sem->count == 0)
 	{	
 		// Block thread if no resource available
 		uthread_block();
-		queue_enqueue(sem->waiting_threads, (void *)pthread_self());
+		queue_enqueue(sem->waiting_threads, (void*)uthread_current());
 	}
 
 	sem->count--;
 	preempt_enable();
+	return 0;
 
 }
 
@@ -74,7 +75,7 @@ int sem_up(sem_t sem)
 	if (queue_length(sem->waiting_threads) > 0)
 	{	
 		// Unblocking first thread in queue
-		uthread_t tid;
+		struct uthread_tcb* tid;
 		queue_dequeue(sem->waiting_threads, (void **)&tid);
 		uthread_unblock(tid);
 	}

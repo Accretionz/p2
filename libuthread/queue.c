@@ -179,7 +179,7 @@ int queue_iterate(queue_t queue, queue_func_t func)
 int queue_length(queue_t queue)
 {
 	/* TODO Phase 1 */
-	if (queue != NULL)
+	if (queue == NULL)
 	{
 		return -1;
 	}

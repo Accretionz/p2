@@ -9,23 +9,20 @@
 #include "private.h"
 #include "uthread.h"
 #include "queue.h"
-
-#define READY 0
-#define RUNNING 1
-#define BLOCKED 2
-#define ZOMBIE 3
+#include "context.c"
+#include "preempt.c"
+#include "sem.c"
 
 typedef enum {
 	READY,
 	RUNNING,
 	BLOCKED,
-	ZOMBIE,
 } uthread_state;
 
 
 struct uthread_tcb {
 	/* TODO Phase 2 */
-	uthread_t tid;
+	//uthread_t tid;
 	uthread_state state;
 	uthread_ctx_t *context;
 	void* stack;
@@ -33,15 +30,15 @@ struct uthread_tcb {
 	uthread_func_t func;
 };
 
-struct thread_system {
-	queue_t thread_queue;
-	queue_t current_thread;
-}
+struct uthread_tcb current_thread;
+struct uthread_tcb next;
+queue_t ready_queue;
+queue_t zombie_queue;
 
 struct uthread_tcb *uthread_current(void)
 {
 	/* TODO Phase 2/3 */
-	return current_thread;
+	return &current_thread;
 }
 
 void uthread_yield(void) //call uthread_ctx_switch to make it so one thread thats currently running tells the actual operating system it wants to run another thread
@@ -49,26 +46,36 @@ void uthread_yield(void) //call uthread_ctx_switch to make it so one thread that
 {
 	/* TODO Phase 2 */
 	preempt_disable();
-	struct uthread_tcb next;
-	if(current_thread->state = RUNNING){
-		current_thread->state = READY;
-		queue_enqueue(current_thread, thread_queue); //putting the active thread in the back of the queue
+
+	if(current_thread.state == RUNNING){
+		current_thread.state = READY;
+		queue_enqueue(ready_queue, (void*)&current_thread); //putting the active thread in the back of the queue
+		printf("Enqueued thread %p\n", (void *)&current_thread);
 	}
 
-	uthread_tcb thread = NULL;
-	queue_dequeue(current_thread, (void**)&thread);
+	struct uthread_tcb *next_thread;
 
-	current_thread->state = RUNNING;
+	if (queue_dequeue(ready_queue, (void**)&next_thread) == 0)
+	{	
+		
+		current_thread = *next_thread;
+		current_thread.state = RUNNING;
 
-	uthread_ctx_thread(current_thread->context, next->context);
+		printf("Switching to thread %p\n", (void *)&current_thread);
+
+
+		uthread_ctx_switch(uthread_current()->context, current_thread.context);
+	}
+
 	preempt_enable();
 }
 
 void uthread_exit(void)
 {
 	/* TODO Phase 2 */
-	current_thread->state = ZOMBIE;
-
+	struct uthread_tcb *zombie_thread;
+	queue_dequeue(ready_queue, (void**)&zombie_thread);
+	queue_enqueue(zombie_queue, zombie_thread);
 	uthread_yield();
 }
 
@@ -81,7 +88,6 @@ int uthread_create(uthread_func_t func, void *arg)
 		return -1;
 	}
 
-	new_thread->tid = 1;
 	new_thread->state = READY;
 	new_thread->stack = uthread_ctx_alloc_stack();
 	if (new_thread->stack == NULL)
@@ -90,14 +96,27 @@ int uthread_create(uthread_func_t func, void *arg)
 		return -1;
 	}
 
-	if (uthread_ctx_init(new_thread->context, new_thread->stack, func, arg) == -1)
+	new_thread->context = (uthread_ctx_t *)malloc(sizeof(uthread_ctx_t));
+	if (new_thread->context == NULL)
 	{
 		uthread_ctx_destroy_stack(new_thread->stack);
 		free(new_thread);
 		return -1;
 	}
+	
+	if (uthread_ctx_init(new_thread->context, new_thread->stack, func, arg) == -1)
+	{
+		uthread_ctx_destroy_stack(new_thread->stack);
+		free(new_thread->context);
+		free(new_thread);
+		return -1;
+	}
 
-	queue_enqueue(thread_queue, new_thread);
+	printf("Created thread %p for function %p\n", (void *)new_thread, (void *)func);
+
+	queue_enqueue(ready_queue, new_thread);
+
+	new_thread->state = READY;
 
 	return 0;
 }
@@ -111,16 +130,36 @@ int uthread_run(bool preempt, uthread_func_t func, void *arg) //initializes all 
 //will have idle thread and app thread
 {
 	/* TODO Phase 2 */
-	// Idle thread creation
-	void *idleStack = uthread_ctx_alloc_stack();
-	if (idleStack == NULL)
+
+	ready_queue = queue_create();
+	if (ready_queue == NULL)
 	{
 		return -1;
 	}
 
+	zombie_queue = queue_create();
+	if (zombie_queue == NULL)
+	{
+		queue_destroy(ready_queue);
+		return -1;
+	}
+
+	// Idle thread creation
+	void *idleStack = uthread_ctx_alloc_stack();
+	
+	if (idleStack == NULL)
+	{
+		queue_destroy(ready_queue);
+		queue_destroy(zombie_queue);
+		return -1;
+	}
+
+	uthread_ctx_t idle_ctx;
 	if (uthread_ctx_init(&idle_ctx, idleStack, NULL, NULL) == -1)
 	{
 		uthread_ctx_destroy_stack(idleStack);
+		queue_destroy(ready_queue);
+		queue_destroy(zombie_queue);
 		return -1;
 	}
 
@@ -128,6 +167,8 @@ int uthread_run(bool preempt, uthread_func_t func, void *arg) //initializes all 
 	if (uthread_create(func, arg) == -1)
 	{
 		uthread_ctx_destroy_stack(idleStack);
+		queue_destroy(ready_queue);
+		queue_destroy(zombie_queue);
 		return -1;
 	}
 
@@ -140,35 +181,41 @@ int uthread_run(bool preempt, uthread_func_t func, void *arg) //initializes all 
 		preempt_disable();
 	}
 
-	while (queue_length(thread_queue) > 0)
+	while (queue_length(ready_queue) > 0)
 	{	
-		// Dequeue thread to be run next
-		struct uthead_tcb *next_thread;
-		if (queue_dequeue(thread_queue, (void**)&next_thread) == -1)
+		printf("Queue length: %d\n", queue_length(ready_queue));
+
+		struct uthread_tcb *next_thread;
+		if (queue_dequeue(ready_queue, (void**)&next_thread) == -1)
 		{
 			uthread_ctx_destroy_stack(idleStack);
-			return -1;
+			break;
 		}
 
-		// If no threads ready to run, switch to idle
-		if (next_thread == NULL)
-		{
-			next_thread = &idle_ctx;
-		}
-
-		uthread_ctx_switch(&idle_ctx, next_thread->context); // Switching to next thread
+		printf("Switching to thread %p\n", (void *)next_thread);
+		current_thread = *next_thread;
+		uthread_ctx_switch(&idle_ctx, current_thread.context);
 	}
 
 	uthread_ctx_destroy_stack(idleStack);
+	queue_destroy(ready_queue);
+	queue_destroy(zombie_queue);
+	return 0;
 }
 
 void uthread_block(void)
 {
 	/* TODO Phase 3 */
+	uthread_current()->state = BLOCKED;
+	uthread_yield();
 }
 
 void uthread_unblock(struct uthread_tcb *uthread)
 {
 	/* TODO Phase 3 */
+	if (uthread && uthread->state == BLOCKED)
+	{
+		uthread->state = READY;
+	}
 }
 
