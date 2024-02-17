@@ -6,14 +6,12 @@
 #include "private.h"
 
 struct semaphore {
-	/* TODO Phase 3 */
 	size_t count; // Number of resources
 	queue_t waiting_threads; // Queue for threads waiting for resources
 };
 
 sem_t sem_create(size_t count)
 {
-	/* TODO Phase 3 */
 	// Allocation of space for semaphore
 	sem_t sem = malloc(sizeof(struct semaphore));
 	if (!sem) return NULL;
@@ -66,7 +64,6 @@ int sem_down(sem_t sem)
 
 int sem_up(sem_t sem)
 {
-	/* TODO Phase 3 */
 	if (!sem) return -1;
 
 	preempt_disable();
