@@ -19,8 +19,6 @@ typedef enum {
 
 
 struct uthread_tcb {
-	/* TODO Phase 2 */
-	//uthread_t tid;
 	uthread_state state;
 	uthread_ctx_t *context;
 	void* stack;
@@ -35,14 +33,12 @@ queue_t zombie_queue;
 
 struct uthread_tcb *uthread_current(void)
 {
-	/* TODO Phase 2/3 */
 	return current_thread;
 }
 
 void uthread_yield(void) //call uthread_ctx_switch to make it so one thread thats currently running tells the actual operating system it wants to run another thread
 //context has the info that defines the thread
 {
-	/* TODO Phase 2 */
 	struct uthread_tcb *next_thread;
 
 	preempt_disable();
@@ -68,11 +64,6 @@ void uthread_yield(void) //call uthread_ctx_switch to make it so one thread that
 
 void uthread_exit(void)
 {
-	/* TODO Phase 2 */
-	// struct uthread_tcb *zombie_thread = uthread_current();
-	// queue_dequeue(ready_queue, (void**)&zombie_thread);
-	// zombie_thread->state = ZOMBIE;
-	// queue_enqueue(zombie_queue, zombie_thread);
 	struct uthread_tcb *zombie_thread = current_thread;
 	zombie_thread->state = ZOMBIE;
 	queue_enqueue(zombie_queue, zombie_thread);
@@ -81,7 +72,6 @@ void uthread_exit(void)
 
 int uthread_create(uthread_func_t func, void *arg)
 {
-	/* TODO Phase 2 */
 	struct uthread_tcb *new_thread = (struct uthread_tcb *)malloc(sizeof(struct uthread_tcb));
 	if (new_thread == NULL)
 	{
@@ -117,21 +107,11 @@ int uthread_create(uthread_func_t func, void *arg)
 
 	queue_enqueue(ready_queue, new_thread);
 
-	// new_thread->state = READY;
-
 	return 0;
 }
 
-int uthread_run(bool preempt, uthread_func_t func, void *arg) //initializes all data structures to make data scheduling work, just a queue - if thread yields, it should take a new ready thread from the front of the queue and put prev running thread in the back - initializes in run
-//makes an idle thread - a TCB information that holds the ocntext for the main
-//process - when a program is run, the kernel makes context and stack for the
-//process - going to have to leave uthread_run and cont in apps main func
-//needs idle thread to store prrocess' context, idle thread also checks for
-//zombies and frees them, and checks if there is anything left before it leaves
-//will have idle thread and app thread
+int uthread_run(bool preempt, uthread_func_t func, void *arg) //initializes all data structures to make data scheduling work
 {
-	/* TODO Phase 2 */
-
 	if (preempt)
 	{
 		preempt_enable();
@@ -189,14 +169,12 @@ int uthread_run(bool preempt, uthread_func_t func, void *arg) //initializes all 
 
 void uthread_block(void)
 {
-	/* TODO Phase 3 */
 	uthread_current()->state = BLOCKED;
 	uthread_yield();
 }
 
 void uthread_unblock(struct uthread_tcb *uthread)
 {
-	/* TODO Phase 3 */
 	if (uthread && uthread->state == BLOCKED)
 	{
 		uthread->state = READY;
