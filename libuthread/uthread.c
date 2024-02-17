@@ -26,6 +26,7 @@ struct uthread_tcb {
 	void* stack;
 	void *arg;
 	uthread_func_t func;
+	struct semaphore *semaphore;
 };
 
 struct uthread_tcb *current_thread;
@@ -44,7 +45,7 @@ void uthread_yield(void) //call uthread_ctx_switch to make it so one thread that
 	/* TODO Phase 2 */
 	struct uthread_tcb *next_thread;
 
-	// preempt_disable();
+	preempt_disable();
 
 	if (current_thread->state == RUNNING)
 	{
@@ -62,7 +63,7 @@ void uthread_yield(void) //call uthread_ctx_switch to make it so one thread that
 		uthread_ctx_switch(yielding_thread->context, next_thread->context);
 	}
 
-	// preempt_enable();
+	preempt_enable();
 }
 
 void uthread_exit(void)
@@ -103,6 +104,8 @@ int uthread_create(uthread_func_t func, void *arg)
 		free(new_thread);
 		return -1;
 	}
+
+	new_thread->semaphore = NULL;
 	
 	if (uthread_ctx_init(new_thread->context, new_thread->stack, func, arg) == -1)
 	{
@@ -159,8 +162,6 @@ int uthread_run(bool preempt, uthread_func_t func, void *arg) //initializes all 
 	// Creating thread
 	if (uthread_create(func, arg) == -1)
 	{
-		// queue_destroy(ready_queue);
-		// queue_destroy(zombie_queue);
 		return -1;
 	}
 
@@ -178,20 +179,10 @@ int uthread_run(bool preempt, uthread_func_t func, void *arg) //initializes all 
 			}
 		}
 
-		// struct uthread_tcb *next_thread;
-		// if (queue_dequeue(ready_queue, (void**)&next_thread) == -1)
-		// {
-		// 	uthread_ctx_destroy_stack(idleStack);
-		// 	break;
-		// }
-
-		// current_thread = *next_thread;
-		// uthread_ctx_switch(&idle_ctx, current_thread.context);
 	}
 
-	// uthread_ctx_destroy_stack(idleStack);
-	// queue_destroy(ready_queue);
-	// queue_destroy(zombie_queue);
+	queue_destroy(ready_queue);
+	queue_destroy(zombie_queue);
 
 	return 0;
 }

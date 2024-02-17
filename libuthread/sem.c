@@ -50,16 +50,19 @@ int sem_down(sem_t sem)
 	/* TODO Phase 3 */
 	if (!sem) return -1;
 
-	preempt_disable(); // Disable preempts to prevent race conditions
+	// Disable preempts to prevent race conditions
+	preempt_disable();
+
 	while(sem->count == 0)
 	{	
 		// Block thread if no resource available
-		uthread_block();
 		queue_enqueue(sem->waiting_threads, (void*)uthread_current());
+		uthread_block();
 	}
 
 	sem->count--;
 	preempt_enable();
+	
 	return 0;
 
 }
@@ -70,6 +73,7 @@ int sem_up(sem_t sem)
 	if (!sem) return -1;
 
 	preempt_disable();
+
 	sem->count++; // Increase semaphore count
 
 	if (queue_length(sem->waiting_threads) > 0)
@@ -78,6 +82,7 @@ int sem_up(sem_t sem)
 		struct uthread_tcb* tid;
 		queue_dequeue(sem->waiting_threads, (void **)&tid);
 		uthread_unblock(tid);
+		uthread_yield();
 	}
 
 	preempt_enable();
