@@ -30,6 +30,5 @@ void thread1(void *arg){
 
 int main(){
   bool preempt = true;
-  int test = 1;
   uthread_run(preempt, thread1, NULL);
 }
