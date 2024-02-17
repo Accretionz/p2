@@ -17,6 +17,7 @@ typedef enum {
 	READY,
 	RUNNING,
 	BLOCKED,
+	ZOMBIE,
 } uthread_state;
 
 
@@ -45,37 +46,38 @@ void uthread_yield(void) //call uthread_ctx_switch to make it so one thread that
 //context has the info that defines the thread
 {
 	/* TODO Phase 2 */
-	preempt_disable();
-
-	if(current_thread.state == RUNNING){
-		current_thread.state = READY;
-		queue_enqueue(ready_queue, (void*)&current_thread); //putting the active thread in the back of the queue
-		printf("Enqueued thread %p\n", (void *)&current_thread);
-	}
-
 	struct uthread_tcb *next_thread;
+
+	// preempt_disable();
+
+	if (current_thread.state == RUNNING)
+	{
+		current_thread.state = READY;
+		
+		queue_enqueue(ready_queue, &current_thread); //putting the active thread in the back of the queue
+	}
 
 	if (queue_dequeue(ready_queue, (void**)&next_thread) == 0)
 	{	
-		
 		current_thread = *next_thread;
 		current_thread.state = RUNNING;
 
-		printf("Switching to thread %p\n", (void *)&current_thread);
-
-
-		uthread_ctx_switch(uthread_current()->context, current_thread.context);
+		uthread_ctx_switch(uthread_current()->context, next_thread->context);
 	}
 
-	preempt_enable();
+	// preempt_enable();
 }
 
 void uthread_exit(void)
 {
 	/* TODO Phase 2 */
-	struct uthread_tcb *zombie_thread;
-	queue_dequeue(ready_queue, (void**)&zombie_thread);
-	queue_enqueue(zombie_queue, zombie_thread);
+	// struct uthread_tcb *zombie_thread = uthread_current();
+	// queue_dequeue(ready_queue, (void**)&zombie_thread);
+	// zombie_thread->state = ZOMBIE;
+	// queue_enqueue(zombie_queue, zombie_thread);
+	struct uthread_tcb zombie_thread = current_thread;
+	zombie_thread.state = ZOMBIE;
+	queue_enqueue(zombie_queue, &zombie_thread);
 	uthread_yield();
 }
 
@@ -111,8 +113,6 @@ int uthread_create(uthread_func_t func, void *arg)
 		free(new_thread);
 		return -1;
 	}
-
-	printf("Created thread %p for function %p\n", (void *)new_thread, (void *)func);
 
 	queue_enqueue(ready_queue, new_thread);
 
@@ -183,7 +183,6 @@ int uthread_run(bool preempt, uthread_func_t func, void *arg) //initializes all 
 
 	while (queue_length(ready_queue) > 0)
 	{	
-		printf("Queue length: %d\n", queue_length(ready_queue));
 
 		struct uthread_tcb *next_thread;
 		if (queue_dequeue(ready_queue, (void**)&next_thread) == -1)
@@ -192,7 +191,6 @@ int uthread_run(bool preempt, uthread_func_t func, void *arg) //initializes all 
 			break;
 		}
 
-		printf("Switching to thread %p\n", (void *)next_thread);
 		current_thread = *next_thread;
 		uthread_ctx_switch(&idle_ctx, current_thread.context);
 	}
